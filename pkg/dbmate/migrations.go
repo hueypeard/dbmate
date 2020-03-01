@@ -41,13 +41,13 @@ func parseMigration(path string) (Migration, Migration, error) {
 	return up, down, err
 }
 
-var upRegExp = regexp.MustCompile(`(?m)^--\s*migrate:up(\s*$|\s+\S+)`)
-var downRegExp = regexp.MustCompile(`(?m)^--\s*migrate:down(\s*$|\s+\S+)$`)
+var upRegExp = regexp.MustCompile(`(?m)^\s*--\s*migrate:up(\s*$|\s+\S+)`)
+var downRegExp = regexp.MustCompile(`(?m)^\--\s*migrate:down(\s*$|\s+\S+)$`)
 var emptyLineRegExp = regexp.MustCompile(`^\s*$`)
 var commentLineRegExp = regexp.MustCompile(`^\s*--`)
 var whitespaceRegExp = regexp.MustCompile(`\s+`)
 var optionSeparatorRegExp = regexp.MustCompile(`:`)
-var blockDirectiveRegExp = regexp.MustCompile(`^--\s*migrate:[up|down]]`)
+var blockDirectiveRegExp = regexp.MustCompile(`^\s*--\s*migrate:[up|down]]`)
 
 // parseMigrationContents parses the string contents of a migration.
 // It will return two Migration objects, the first representing the "up"

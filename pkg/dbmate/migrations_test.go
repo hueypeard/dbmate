@@ -43,6 +43,26 @@ drop table users;
 	require.Equal(t, true, down.Options.Transaction())
 }
 
+func TestParseMigrationLeadingWhitespace(t *testing.T) {
+	// It allows whitespace before '-- migrate'
+	migration := `
+  -- migrate:up
+create table users (id serial, name text);
+
+	--migrate:down
+drop table users;
+`
+
+	up, down, err := parseMigrationContents(migration)
+	require.Nil(t, err)
+
+	require.Equal(t, "  --migrate:up\ncreate table users (id serial, name text);\n\n", up.Contents)
+	require.Equal(t, true, up.Options.Transaction())
+
+	require.Equal(t, "	--migrate:down\ndrop table users;\n", down.Contents)
+	require.Equal(t, true, down.Options.Transaction())
+}
+
 func TestParseMigrationContentsDownFirst(t *testing.T) {
 	// It is acceptable for down to be defined before up
 	migration := `-- migrate:down
