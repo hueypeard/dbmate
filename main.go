@@ -1,16 +1,37 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 	"github.com/urfave/cli"
 
 	"github.com/amacneil/dbmate/pkg/dbmate"
 )
+
+type Field struct {
+	Title string`json:"title"`
+	Value string`json:"value"`
+}
+
+type SlackAttachment struct {
+	Color    string`json:"color"`
+	Pretext  string`json:"pretext"`
+	Fallback string`json:"fallback"`
+	Text     string`json:"text"`
+	Fields   []Field`json:"fields"`
+}
+
+type SlackMessage struct {
+	Attachments []SlackAttachment`json:"attachments"`
+}
 
 func main() {
 	loadDotEnv()
@@ -46,6 +67,15 @@ func NewApp() *cli.App {
 			Name:  "schema-file, s",
 			Value: dbmate.DefaultSchemaFile,
 			Usage: "specify the schema file location",
+		},
+		cli.StringFlag{
+			Name:  "slack-webhook-var",
+			Value: "SLACK_WEBHOOK_URL",
+			Usage: "slack webhook url env var",
+		},
+		cli.StringFlag{
+			Name:  "env-vars",
+			Usage: "slack webhook env var names for context (comma delimited)",
 		},
 		cli.BoolFlag{
 			Name:  "no-dump-schema",
@@ -92,7 +122,51 @@ func NewApp() *cli.App {
 			Name:  "migrate",
 			Usage: "Migrate to the latest version",
 			Action: action(func(db *dbmate.DB, c *cli.Context) error {
-				return db.Migrate()
+				err := db.Migrate()
+				_, webhook_env_exists := os.LookupEnv(c.GlobalString("slack-webhook-var"))
+
+				if err != nil && webhook_env_exists {
+					env_vars := strings.Split(c.GlobalString("env-vars"), ",")
+					fmt.Printf("%s: %s\n", "env-vars split", env_vars)
+
+					//
+
+					fields := make([]Field, 0)
+
+					for _, env_var_name := range env_vars {
+						_, env_var_exists := os.LookupEnv(env_var_name)
+						if env_var_exists {
+							fields = append(fields, Field{
+								Title: env_var_name,
+								Value: os.Getenv(env_var_name),
+							})
+						}
+					}
+
+					slack_message := SlackMessage{
+						Attachments: []SlackAttachment{
+							SlackAttachment{
+								Fallback: "Migration had error: " + err.Error(),
+								Color:    "#FF0000",
+								Pretext:  "There was an issue running migrations on this instance.",
+								Text:     err.Error(),
+								Fields:   fields,
+							},
+						},
+					}
+
+					url := os.Getenv(c.GlobalString("slack-webhook-var"))
+
+					body, _ := json.Marshal(slack_message)
+
+					_, err := http.Post(url, "application/json", bytes.NewBuffer(body))
+
+					if err != nil {
+						fmt.Printf("%s: %s\n", "could not send to webhook", url)
+					}
+				}
+
+				return err
 			}),
 		},
 		{
